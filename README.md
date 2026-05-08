@@ -1,6 +1,9 @@
-# CloudDash Support — Multi-Agent Customer Support System
+# CloudDash Support ; Multi-Agent Customer Support System
 
 A production-prototype multi-agent system for CloudDash, a cloud infrastructure monitoring SaaS.
+
+<img width="1900" height="946" alt="image" src="https://github.com/user-attachments/assets/9625825d-9588-4375-9196-2cffd6158220" />
+
 
 ## Quick Start
 
