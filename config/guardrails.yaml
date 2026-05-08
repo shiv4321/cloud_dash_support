@@ -1,0 +1,47 @@
+input_guard:
+  prompt_injection:
+    enabled: true
+    patterns:
+      - "ignore previous instructions"
+      - "ignore all instructions"
+      - "disregard your"
+      - "forget your system prompt"
+      - "you are now"
+      - "act as if"
+      - "pretend you are"
+      - "override your"
+      - "jailbreak"
+    action: block
+    message: "I'm here to help with CloudDash support. How can I assist you today?"
+
+  off_topic:
+    enabled: true
+    action: redirect
+    message: "I can only help with CloudDash product questions. What can I help you with?"
+
+  max_input_length: 4000
+
+output_guard:
+  pii_redaction:
+    enabled: true
+    patterns:
+      - name: credit_card
+        regex: '\b(?:\d[ -]?){13,16}\b'
+        replacement: "[CARD-REDACTED]"
+      - name: ssn
+        regex: '\b\d{3}-\d{2}-\d{4}\b'
+        replacement: "[SSN-REDACTED]"
+
+  grounding_check:
+    enabled: true
+    similarity_threshold: 0.35
+    disclaimer: |
+      Note: I couldn't find a specific KB article for this. I recommend verifying with our support team.
+      Would you like me to escalate this?
+
+  fabrication_guard:
+    enabled: true
+    deny_patterns:
+      - "CloudDash guarantees"
+      - "we promise 100%"
+      - "always works"
