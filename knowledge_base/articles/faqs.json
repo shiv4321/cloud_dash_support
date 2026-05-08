@@ -1,0 +1,56 @@
+[
+  {
+    "id": "KB-001",
+    "title": "How to Reset Your API Key",
+    "category": "faq",
+    "tags": ["api-key", "reset", "security", "authentication"],
+    "applies_to": ["Starter", "Pro", "Enterprise"],
+    "last_updated": "2026-04-15",
+    "content": "## How to Reset Your API Key\n\nYour CloudDash API key is used to authenticate all programmatic access to the platform. If your key is compromised or you simply want to rotate it, follow these steps.\n\n### Steps to Reset\n1. Log in to your CloudDash dashboard at app.clouddash.io.\n2. Navigate to **Settings** → **API & Integrations** → **API Keys**.\n3. Locate the key you want to reset and click **Revoke**.\n4. Click **Generate New Key**.\n5. Copy and store the new key immediately — it will only be shown once.\n\n### Important Notes\n- Revoking a key is **immediate and irreversible**. Any services using the old key will stop working instantly.\n- You can have up to 5 active API keys simultaneously on Pro and Enterprise plans; Starter plans are limited to 1.\n- API keys do not expire automatically — you must rotate them manually.\n- Always store keys in environment variables or a secrets manager, never in source code.\n\n### After Resetting\nUpdate the key in all services and integrations that depend on it. If you use our SDKs, update the `CLOUDDASH_API_KEY` environment variable and restart your services."
+  },
+  {
+    "id": "KB-002",
+    "title": "What Cloud Providers Does CloudDash Support?",
+    "category": "faq",
+    "tags": ["cloud-providers", "aws", "gcp", "azure", "integrations", "supported-platforms"],
+    "applies_to": ["Starter", "Pro", "Enterprise"],
+    "last_updated": "2026-04-10",
+    "content": "## Supported Cloud Providers\n\nCloudDash supports monitoring across all three major cloud providers, as well as multi-cloud environments.\n\n### AWS (Amazon Web Services)\n- **Services monitored**: EC2, RDS, Lambda, S3, CloudWatch metrics, ECS, EKS, ALB/NLB, SQS, SNS, DynamoDB\n- **Integration method**: IAM Role (recommended) or Access Key + Secret\n- **Minimum IAM permissions**: `CloudWatchReadOnlyAccess`, `AmazonEC2ReadOnlyAccess`\n\n### GCP (Google Cloud Platform)\n- **Services monitored**: Compute Engine, Cloud SQL, Cloud Functions, GKE, Cloud Storage, Pub/Sub, BigQuery\n- **Integration method**: Service Account with JSON key file\n- **Minimum permissions**: `roles/monitoring.viewer`, `roles/compute.viewer`\n\n### Azure\n- **Services monitored**: Virtual Machines, Azure SQL, Azure Functions, AKS, Blob Storage, Event Hubs, Cosmos DB\n- **Integration method**: Service Principal (App Registration) with Reader role\n- **Minimum permissions**: `Reader` role at subscription or resource group level\n\n### Multi-Cloud\nAll plans support connecting multiple cloud providers simultaneously. Dashboards can aggregate metrics from AWS + GCP + Azure into unified views.\n\n### Not Currently Supported\n- Oracle Cloud Infrastructure (OCI)\n- IBM Cloud\n- Alibaba Cloud\nIf you need support for these, please submit a feature request via the Help menu."
+  },
+  {
+    "id": "KB-003",
+    "title": "How to Invite Team Members to CloudDash",
+    "category": "faq",
+    "tags": ["team", "invite", "users", "access", "collaboration"],
+    "applies_to": ["Starter", "Pro", "Enterprise"],
+    "last_updated": "2026-03-20",
+    "content": "## Inviting Team Members\n\nCloudDash supports team-based access so multiple users can collaborate on the same infrastructure monitoring setup.\n\n### Steps to Invite\n1. Go to **Settings** → **Team & Access** → **Members**.\n2. Click **Invite Member**.\n3. Enter the team member's email address.\n4. Select a role: **Viewer**, **Editor**, or **Admin** (see role definitions below).\n5. Click **Send Invite**. The invitee receives an email with a link valid for 48 hours.\n\n### Role Definitions\n| Role | Can View | Can Edit Dashboards | Can Manage Alerts | Can Manage Billing | Can Invite Users |\n|---|---|---|---|---|---|\n| Viewer | ✅ | ❌ | ❌ | ❌ | ❌ |\n| Editor | ✅ | ✅ | ✅ | ❌ | ❌ |\n| Admin | ✅ | ✅ | ✅ | ✅ | ✅ |\n\n### Seat Limits by Plan\n- **Starter**: 3 seats included\n- **Pro**: 10 seats included (additional seats at $15/month each)\n- **Enterprise**: Unlimited seats\n\n### Resending or Revoking Invites\n- Pending invites can be resent or revoked from the **Members** page under the **Pending Invites** tab.\n- To remove an existing member, click the three-dot menu next to their name and select **Remove Member**."
+  },
+  {
+    "id": "KB-004",
+    "title": "CloudDash System Requirements and Browser Support",
+    "category": "faq",
+    "tags": ["system-requirements", "browser", "compatibility", "setup"],
+    "applies_to": ["Starter", "Pro", "Enterprise"],
+    "last_updated": "2026-02-28",
+    "content": "## System Requirements\n\nCloudDash is a web-based SaaS platform — no software installation is required for the dashboard UI.\n\n### Supported Browsers\n| Browser | Minimum Version |\n|---|---|\n| Google Chrome | 110+ |\n| Mozilla Firefox | 109+ |\n| Microsoft Edge | 110+ |\n| Safari | 16+ |\n\nInternet Explorer is not supported.\n\n### CloudDash Agent (for host-level metrics)\nIf you install the optional CloudDash host agent for system-level metrics (CPU, memory, disk, processes):\n- **OS**: Ubuntu 20.04+, Debian 11+, CentOS 8+, RHEL 8+, Amazon Linux 2, Windows Server 2019+\n- **RAM**: 128 MB minimum\n- **Disk**: 200 MB for agent + local buffer\n- **Network**: Outbound HTTPS (port 443) to `ingest.clouddash.io`\n\n### SDK Requirements\n- **Python SDK**: Python 3.8+\n- **Node.js SDK**: Node 16+\n- **Go SDK**: Go 1.19+\n\n### Network / Firewall\nCloudDash must be able to reach cloud provider APIs (AWS, GCP, Azure endpoints). No inbound firewall rules are required — all connections are outbound from CloudDash to your cloud."
+  },
+  {
+    "id": "KB-005",
+    "title": "How to Create and Manage Dashboards",
+    "category": "faq",
+    "tags": ["dashboard", "widgets", "metrics", "visualization", "setup"],
+    "applies_to": ["Starter", "Pro", "Enterprise"],
+    "last_updated": "2026-04-01",
+    "content": "## Creating and Managing Dashboards\n\nDashboards are the core of CloudDash — they let you visualize metrics from all your connected cloud providers in one place.\n\n### Creating a Dashboard\n1. Click **+ New Dashboard** in the left sidebar.\n2. Give it a name and optionally assign it to a folder.\n3. Click **Add Widget** to start adding metric panels.\n\n### Widget Types\n- **Time Series**: Line/area chart for metrics over time (CPU, memory, request rate)\n- **Stat**: Single number — great for current values (e.g. active instances)\n- **Gauge**: Shows a value relative to a min/max (e.g. disk usage %)\n- **Table**: Tabular view of multiple resources\n- **Alert List**: Shows firing alerts in real time\n- **Log Panel**: Streams logs from connected sources\n\n### Dashboard Variables\nUse variables to make dashboards dynamic. Example: a `$region` variable lets you switch between `us-east-1` and `eu-west-1` without editing each widget.\n\n### Sharing Dashboards\n- **Internal share**: Share with team members via a link (requires login)\n- **Public snapshot**: Generate a read-only public URL (Pro and Enterprise only)\n- **Export**: Export dashboard JSON to import into another CloudDash org\n\n### Dashboard Limits\n- Starter: 5 dashboards, 10 widgets per dashboard\n- Pro: 50 dashboards, 50 widgets per dashboard\n- Enterprise: Unlimited"
+  },
+  {
+    "id": "KB-006",
+    "title": "How to Contact CloudDash Support",
+    "category": "faq",
+    "tags": ["support", "contact", "help", "ticket", "escalation"],
+    "applies_to": ["Starter", "Pro", "Enterprise"],
+    "last_updated": "2026-04-12",
+    "content": "## Contacting CloudDash Support\n\n### Support Channels by Plan\n| Plan | Channel | Response SLA |\n|---|---|---|\n| Starter | Email only | 3 business days |\n| Pro | Email + Live Chat | 8 business hours |\n| Enterprise | Email + Chat + Phone + Dedicated CSM | 1 business hour |\n\n### How to Submit a Ticket\n1. Click the **Help** icon (?) in the bottom-left of the dashboard.\n2. Select **Submit a Request**.\n3. Choose a category: Technical, Billing, Account, or Feature Request.\n4. Describe your issue — include error messages, screenshots, and your account ID.\n5. Click **Submit**. You'll receive a confirmation email with a ticket number.\n\n### Live Chat\nAvailable for Pro and Enterprise plans. Click the chat bubble in the bottom-right of the dashboard. Chat is available Monday–Friday, 9am–6pm EST.\n\n### Emergency Escalation (Enterprise)\nEnterprise customers with a Critical issue (production down) can call the emergency support line listed in their onboarding email or reach their dedicated Customer Success Manager directly.\n\n### What to Include in a Ticket\n- Your account ID (found in **Settings** → **General**)\n- The affected resource or integration name\n- Steps to reproduce the issue\n- Any error messages or screenshots\n- The time the issue started"
+  }
+]
