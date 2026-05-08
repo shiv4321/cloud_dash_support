@@ -1,5 +1,4 @@
-const BASE = "/api/v1";
-const TIMEOUT_MS = 30000;
+const BASE = (import.meta.env.VITE_API_BASE || "") + "/api/v1";const TIMEOUT_MS = 30000;
 
 function fetchWithTimeout(url, options = {}) {
   const controller = new AbortController();
