@@ -64,11 +64,20 @@ class SendMessageRequest(BaseModel):
     message: str
 
 
+class AgentMessage(BaseModel):
+    agent: str
+    response: str
+    sources: list[str] = Field(default_factory=list)
+    routing_target: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class SendMessageResponse(BaseModel):
     conversation_id: str
     trace_id: str
     agent: str
     response: str
+    messages: list[AgentMessage] = Field(default_factory=list)
     sources: list[str] = Field(default_factory=list)
     routing_target: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)

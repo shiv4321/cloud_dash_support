@@ -27,7 +27,7 @@ def _build_orchestrator(agents: dict[str, _StubAgent], handover: MagicMock) -> O
     return orch
 
 
-def test_pending_followup_handover_is_deferred_and_keeps_current_response():
+def test_pending_followup_handover_returns_multi_messages_same_turn():
     triage = _StubAgent(
         "Triage Agent",
         [
@@ -68,13 +68,17 @@ def test_pending_followup_handover_is_deferred_and_keeps_current_response():
     )
 
     state = ConversationState()
-    updated_state, response = orch.handle_message(
+    updated_state, responses = orch.handle_message_multi(
         state,
         "I want to upgrade, but first resolve my SSO issue.",
     )
 
-    assert response.agent == "Technical Support Agent"
-    assert "SSO issue resolved" in response.content
+    assert len(responses) == 3
+    assert responses[0].agent == "Triage Agent"
+    assert responses[1].agent == "Technical Support Agent"
+    assert responses[2].agent == "Billing Agent"
+    assert "SSO issue resolved" in responses[1].content
+    assert "Upgrade steps." in responses[2].content
     assert updated_state.current_agent == "billing"
     assert handover.execute.call_count == 2
 

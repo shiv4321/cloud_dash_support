@@ -70,7 +70,7 @@ class Orchestrator:
         self._lf = _make_langfuse()
         log.info("orchestrator loaded agents=%s langfuse=%s", list(self._agents.keys()), self._lf is not None)
 
-    def handle_message(self, state: ConversationState, user_message: str) -> tuple[ConversationState, AgentResponse]:
+    def handle_message_multi(self, state: ConversationState, user_message: str) -> tuple[ConversationState, list[AgentResponse]]:
         state.history.append(Message(role="user", content=user_message))
 
         # Only triage on the very first message; subsequent messages go to current specialist
@@ -79,7 +79,7 @@ class Orchestrator:
             state.current_agent = "triage"
 
         handover_count = 0
-        response: AgentResponse | None = None
+        responses: list[AgentResponse] = []
 
         while handover_count <= _MAX_HANDOVERS:
             agent_key = state.current_agent
@@ -105,6 +105,7 @@ class Orchestrator:
                     routing_target="escalation",
                 )
 
+            responses.append(response)
             state.history.append(Message(role="assistant", content=response.content))
 
             # No further routing needed
@@ -118,25 +119,6 @@ class Orchestrator:
             if target not in self._agents:
                 log.warning("orchestrator unknown_target=%s falling_back=escalation", target)
                 target = "escalation"
-
-            # For deterministic multi-intent sequencing, defer specialist follow-up handovers
-            # to the next user turn so the current specialist response is visible to the user.
-            if (
-                agent_key != "triage"
-                and response.metadata.get("handover_reason") == "pending_followup"
-            ):
-                state = self.handover.execute(
-                    state=state,
-                    source_agent=agent_key,
-                    target_agent=target,
-                    reason=f"Deferred follow-up from {agent_key} to {target}",
-                    response=response,
-                )
-                log.info(
-                    "orchestrator deferred_handover trace_id=%s from=%s to=%s",
-                    state.trace_id, agent_key, target,
-                )
-                break
 
             try:
                 state = self.handover.execute(
@@ -159,10 +141,14 @@ class Orchestrator:
 
             handover_count += 1
 
-        if response is None:
-            response = AgentResponse(
+        if not responses:
+            responses = [AgentResponse(
                 agent="orchestrator",
                 content="I'm unable to process your request at the moment. Please try again.",
-            )
+            )]
 
-        return state, response
+        return state, responses
+
+    def handle_message(self, state: ConversationState, user_message: str) -> tuple[ConversationState, AgentResponse]:
+        state, responses = self.handle_message_multi(state, user_message)
+        return state, responses[-1]

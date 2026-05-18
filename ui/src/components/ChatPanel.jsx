@@ -29,6 +29,25 @@ const SESSION_EXPIRED_MSG = {
   sources: [],
 };
 
+function assistantMessagesFromResponse(res) {
+  if (Array.isArray(res.messages) && res.messages.length > 0) {
+    return res.messages.map((m) => ({
+      role: "assistant",
+      content: m.response,
+      agent: m.agent,
+      sources: m.sources || [],
+      metadata: m.metadata || {},
+    }));
+  }
+  return [{
+    role: "assistant",
+    content: res.response,
+    agent: res.agent,
+    sources: res.sources || [],
+    metadata: res.metadata || {},
+  }];
+}
+
 export default function ChatPanel({ conversation, onUpdate, onReset, onNew, onToggleContext, contextOpen }) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -57,11 +76,9 @@ export default function ChatPanel({ conversation, onUpdate, onReset, onNew, onTo
         onUpdate({ messages: [userMsg] }, conv.id);          // user message appears instantly
 
         const res = await sendMessage(conv.id, text);
-        const assistantMsg = {
-          role: "assistant", content: res.response,
-          agent: res.agent, sources: res.sources || [], metadata: res.metadata || {},
-        };
-        onUpdate({ messages: [userMsg, assistantMsg], agent: res.agent }, conv.id);
+        const assistantMsgs = assistantMessagesFromResponse(res);
+        const finalAgent = assistantMsgs[assistantMsgs.length - 1]?.agent || res.agent;
+        onUpdate({ messages: [userMsg, ...assistantMsgs], agent: finalAgent }, conv.id);
       } catch {
         // swallow — no conv to update
       } finally {
@@ -93,14 +110,9 @@ export default function ChatPanel({ conversation, onUpdate, onReset, onNew, onTo
         }
       }
 
-      const assistantMsg = {
-        role: "assistant",
-        content: res.response,
-        agent: res.agent,
-        sources: res.sources || [],
-        metadata: res.metadata || {},
-      };
-      onUpdate({ messages: [...currentMessages, assistantMsg], agent: res.agent }, conversation.id);
+      const assistantMsgs = assistantMessagesFromResponse(res);
+      const finalAgent = assistantMsgs[assistantMsgs.length - 1]?.agent || res.agent;
+      onUpdate({ messages: [...currentMessages, ...assistantMsgs], agent: finalAgent }, conversation.id);
     } catch (err) {
       onUpdate({
         messages: [

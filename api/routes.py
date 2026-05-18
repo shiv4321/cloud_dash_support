@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 
 from agents.orchestrator import Orchestrator
 from api.models import (
+    AgentMessage,
     ConversationHistoryResponse,
     ConversationState,
     SendMessageRequest,
@@ -44,7 +45,8 @@ def start_conversation(body: StartConversationRequest) -> StartConversationRespo
                 trace_id=state.trace_id,
                 message=guard_result.message,
             )
-        state, response = _orchestrator.handle_message(state, body.initial_message)
+        state, responses = _orchestrator.handle_message_multi(state, body.initial_message)
+        response = responses[-1]
         _sessions[state.trace_id] = state
         return StartConversationResponse(
             conversation_id=state.trace_id,
@@ -75,8 +77,9 @@ def send_message(conversation_id: str, body: SendMessageRequest) -> SendMessageR
             response=guard_result.message or "Message blocked.",
         )
 
-    state, response = _orchestrator.handle_message(state, body.message)
-    response = _output_guard.process(response)
+    state, responses = _orchestrator.handle_message_multi(state, body.message)
+    responses = [_output_guard.process(r) for r in responses]
+    response = responses[-1]
     _sessions[conversation_id] = state
 
     return SendMessageResponse(
@@ -84,6 +87,16 @@ def send_message(conversation_id: str, body: SendMessageRequest) -> SendMessageR
         trace_id=state.trace_id,
         agent=response.agent,
         response=response.content,
+        messages=[
+            AgentMessage(
+                agent=r.agent,
+                response=r.content,
+                sources=r.sources,
+                routing_target=r.routing_target,
+                metadata=r.metadata,
+            )
+            for r in responses
+        ],
         sources=response.sources,
         routing_target=response.routing_target,
         metadata=response.metadata,
