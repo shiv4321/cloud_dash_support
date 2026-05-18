@@ -6,50 +6,183 @@ The system is a stateful multi-agent orchestration pipeline sitting between a Fa
 
 ---
 
-## Component Map
-
+## End-to-End System Flow
+ 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        FastAPI Gateway                          │
-│  POST /conversation · POST /conversation/{id}/message           │
-│  GET /conversation/{id}/history · GET /health                   │
-└───────────────┬─────────────────────────────────────────────────┘
-                │
-        ┌───────▼────────┐
-        │  Input Guard   │  prompt injection regex + off-topic check
-        └───────┬────────┘
-                │
-        ┌───────▼────────┐
-        │  Orchestrator  │  YAML-driven agent registry
-        │  (routes loop) │  max 5 handovers per conversation
-        └───┬───┬───┬────┘
-            │   │   │
-   ┌────────▼─┐ │ ┌─▼──────────┐    ┌──────────────────┐
-   │  Triage  │ │ │  Billing   │    │   Escalation     │
-   │  Agent   │ │ │  Agent     │───►│   Agent          │
-   └────┬─────┘ │ └─────┬──────┘    └──────────────────┘
-        │       │       │
-   ┌────▼───────▼───────▼────────────────────────────────────┐
-   │              Technical Support Agent                     │
-   │  KB retrieval · step-by-step troubleshooting            │
-   └────────────────────┬────────────────────────────────────┘
-                        │
-              ┌─────────▼──────────┐
-              │    RAG Pipeline    │
-              │ rewrite→embed→     │
-              │ retrieve→rerank    │
-              └─────────┬──────────┘
-                        │
-              ┌─────────▼──────────┐
-              │  Pinecone + BM25   │
-              │  Hybrid Retrieval  │
-              └────────────────────┘
-                        │
-              ┌─────────▼──────────┐
-              │  Output Guard      │
-              │  PII · grounding   │
-              └────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                        USER                             │
+│         POST /api/v1/conversation/{id}/message          │
+└─────────────────────────┬───────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│                   INPUT GUARD                           │
+│  • Prompt injection regex (9 patterns)                  │
+│  • Off-topic token check (40 CloudDash keywords)        │
+│  • Max 4,000 character limit                            │
+└──────┬──────────────────┬──────────────────────────────┘
+       │ blocked          │ passed
+       ▼                  ▼
+  [REJECTED]   ┌─────────────────────────────────────────┐
+               │           ORCHESTRATOR                  │
+               │  • YAML plugin registry                 │
+               │  • Loads agents via importlib           │
+               │  • Max 5 handovers per conversation     │
+               │  • trace_id flows through every step    │
+               └─────────────────┬───────────────────────┘
+                                 │ first message always
+                                 ▼
+               ┌─────────────────────────────────────────┐
+               │            TRIAGE AGENT                 │
+               │  • GPT-4o with function calling         │
+               │  • classify_intent tool (structured)    │
+               │  • Extracts: intent, plan, urgency,     │
+               │    entities, routing_target             │
+               │  • Routes to: technical | billing       │
+               └──────────┬─────────────┬────────────────┘
+                          │             │
+              ┌───────────▼──┐     ┌────▼──────────────┐
+              │  TECHNICAL   │     │     BILLING        │
+              │    AGENT     │     │      AGENT         │
+              │              │     │                    │
+              │ Troubleshoot │     │ Invoices, plans,   │
+              │ + full RAG   │     │ refund triggers    │
+              │ pipeline     │     │ + RAG pipeline     │
+              └──────┬───────┘     └────────┬───────────┘
+                     │                      │
+                     │   ┌──────────────────┘
+                     │   │ refund trigger / KB miss
+                     │   ▼
+                     │  ┌────────────────────────────────┐
+                     │  │       ESCALATION AGENT         │
+                     │  │  • Terminal node (no handover) │
+                     │  │  • Packages full context       │
+                     │  │  • SLA by plan tier:           │
+                     │  │    Enterprise 1h / Pro 8h /    │
+                     │  │    Starter 3 days              │
+                     │  │  • Writes to audit.jsonl       │
+                     │  └──────────────┬─────────────────┘
+                     │                 │
+                     ▼                 │
+        ┌────────────────────────┐     │
+        │      RAG PIPELINE      │     │
+        │                        │     │
+        │  1. Query rewrite      │     │
+        │     gpt-4o-mini        │     │
+        │     temp=0.0           │     │
+        │     last 4 turns       │     │
+        │                        │     │
+        │  2. Embed query        │     │
+        │     llama-text-embed-v2│     │
+        │     input_type=query   │     │
+        │     1,024 dims         │     │
+        │                        │     │
+        │  3. Hybrid retrieval   │     │
+        │     Pinecone dense     │     │
+        │     + rank_bm25 sparse │     │
+        │     fusion:            │     │
+        │     0.7×dense          │     │
+        │     + 0.3×BM25         │     │
+        │                        │     │
+        │  4. Threshold filter   │     │
+        │     score ≥ 0.35 only  │     │
+        │     else → escalation  │     │
+        └──────────┬─────────────┘     │
+                   │                   │
+                   ▼                   │
+        ┌────────────────────────┐     │
+        │   GPT-4o RESPONSE      │     │
+        │                        │     │
+        │  KB chunks injected    │     │
+        │  into system prompt    │     │
+        │  Citations mandatory   │     │
+        │  (Source: KB-XXX)      │     │
+        └──────────┬─────────────┘     │
+                   │                   │
+                   └─────────┬─────────┘
+                             │
+                             ▼
+               ┌─────────────────────────────────────────┐
+               │            OUTPUT GUARD                 │
+               │  • PII redaction (cards, SSNs)          │
+               │  • Fabrication strip                    │
+               │  • Grounding check + disclaimer         │
+               └─────────────────┬───────────────────────┘
+                                 │
+                                 ▼
+               ┌─────────────────────────────────────────┐
+               │           RESPONSE TO USER              │
+               │  { agent, text, sources, metadata }     │
+               └─────────────────────────────────────────┘
 ```
+ 
+---
+ 
+## Agent Summary
+ 
+| Agent | Model | Temp | Purpose | Can hand off to |
+|---|---|---|---|---|
+| Triage | GPT-4o | 0.1 | Classify intent, extract entities, route | technical, billing |
+| Technical | GPT-4o | 0.2 | Troubleshooting via RAG | billing, escalation |
+| Billing | GPT-4o | 0.1 | Plans, invoices, refund policy | escalation |
+| Escalation | GPT-4o | 0.2 | Human handover, SLA, audit log | — (terminal) |
+ 
+---
+ 
+## RAG Pipeline Detail
+ 
+```
+User message (raw)
+        │
+        ▼
+  Query rewrite          ← gpt-4o-mini, temp=0.0, last 4 turns
+        │                   "still broken" → "AWS credential rotation
+        │                    CloudWatch alert not firing Pro plan"
+        ▼
+  Embed (query type)     ← llama-text-embed-v2, input_type="query"
+        │
+        ├──► Pinecone dense search   (cosine similarity, top_k×2 candidates)
+        │
+        └──► BM25 sparse scoring     (rank_bm25, built from corpus at startup)
+                │
+                ▼
+        Hybrid fusion score
+        0.7 × dense + 0.3 × BM25_normalized
+                │
+                ▼
+        Threshold filter (≥ 0.35)
+                │
+        ┌───────┴────────┐
+      pass             miss
+        │                │
+        ▼                ▼
+   Top-K chunks     needs_escalation=True
+   into prompt      → route to escalation
+```
+ 
+---
+ 
+## Handover Protocol
+ 
+When a specialist cannot resolve the issue, `HandoverProtocol.execute()` runs:
+ 
+```
+HandoverContext snapshot
+  ├── source_agent
+  ├── target_agent
+  ├── reason
+  ├── summary        ← last 6 conversation turns + KB sources
+  ├── entities       ← plan, urgency, issue_type, extracted_entities
+  └── timestamp
+ 
+→ Injected as system message prefix to receiving agent
+→ Appended to logs/audit.jsonl
+→ handover_count incremented (circuit breaker: max 5)
+```
+ 
+The receiving agent has full context before processing the first message. The customer never repeats themselves.
+ 
+---
 
 ---
 
