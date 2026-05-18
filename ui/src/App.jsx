@@ -24,7 +24,9 @@ export default function App() {
 
   async function handleNewConversation(prebuilt) {
     if (prebuilt) {
-      setConversations(prev => [prebuilt, ...prev]);
+      setConversations(prev => (
+        prev.some(c => c.id === prebuilt.id) ? prev : [prebuilt, ...prev]
+      ));
       setActiveId(prebuilt.id);
       return prebuilt;
     }
@@ -40,7 +42,9 @@ export default function App() {
         agent:    "Triage Agent",
         entities: {},
       };
-      setConversations(prev => [conv, ...prev]);
+      setConversations(prev => (
+        prev.some(c => c.id === conv.id) ? prev : [conv, ...prev]
+      ));
       setActiveId(conv.id);
       return conv;
     } finally {
@@ -49,16 +53,38 @@ export default function App() {
   }
 
   function updateConversation(id, patch) {
+    if (!id) return;
     setConversations(prev =>
-      prev.map(c => {
-        if (c.id !== id) return c;
-        const updated = { ...c, ...patch };
-        if (patch.messages?.length) {
-          const last = patch.messages[patch.messages.length - 1];
-          if (last?.content) updated.preview = last.content.replace(/[#*`]/g, "").slice(0, 60);
+      {
+        const existing = prev.find(c => c.id === id);
+        if (!existing) {
+          const seeded = {
+            id,
+            traceId: patch.traceId || id,
+            label: `Session ${prev.length + 1}`,
+            preview: "",
+            messages: [],
+            agent: "Triage Agent",
+            entities: {},
+            ...patch,
+          };
+          if (seeded.messages?.length) {
+            const last = seeded.messages[seeded.messages.length - 1];
+            if (last?.content) seeded.preview = last.content.replace(/[#*`]/g, "").slice(0, 60);
+          }
+          return [seeded, ...prev];
         }
-        return updated;
-      })
+
+        return prev.map(c => {
+          if (c.id !== id) return c;
+          const updated = { ...c, ...patch };
+          if (patch.messages?.length) {
+            const last = patch.messages[patch.messages.length - 1];
+            if (last?.content) updated.preview = last.content.replace(/[#*`]/g, "").slice(0, 60);
+          }
+          return updated;
+        });
+      }
     );
   }
 

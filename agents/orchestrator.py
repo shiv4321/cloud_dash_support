@@ -18,18 +18,17 @@ log = logging.getLogger(__name__)
 
 
 def _make_langfuse():
-    pub = os.getenv("LANGFUSE_PUBLIC_KEY")
-    sec = os.getenv("LANGFUSE_SECRET_KEY")
+    pub  = os.getenv("LANGFUSE_PUBLIC_KEY")
+    sec  = os.getenv("LANGFUSE_SECRET_KEY")
+    host = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
     if not (pub and sec):
         return None
     try:
         from langfuse import Langfuse
-        return Langfuse(
-            public_key=pub,
-            secret_key=sec,
-            host=os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"),
-        )
-    except Exception as exc:  # noqa: BLE001
+        lf = Langfuse(public_key=pub, secret_key=sec, host=host, debug=True)
+        log.info("langfuse client host=%s", host)
+        return lf
+    except Exception as exc:
         log.warning("langfuse init failed: %s — tracing disabled", exc)
         return None
 
@@ -79,18 +78,6 @@ class Orchestrator:
         if is_first_message or state.current_agent in (None, "triage"):
             state.current_agent = "triage"
 
-        lf_trace = None
-        if self._lf:
-            try:
-                lf_trace = self._lf.trace(
-                    name="handle_message",
-                    id=state.trace_id,
-                    input={"message": user_message},
-                    metadata={"entities": state.entities, "current_agent": state.current_agent},
-                )
-            except Exception:
-                lf_trace = None
-
         handover_count = 0
         response: AgentResponse | None = None
 
@@ -108,13 +95,6 @@ class Orchestrator:
                 state.trace_id, agent_key, handover_count,
             )
 
-            lf_span = None
-            if lf_trace:
-                try:
-                    lf_span = lf_trace.span(name=f"agent.{agent_key}", input={"message": user_message})
-                except Exception:
-                    pass
-
             try:
                 response = agent.process(state)
             except Exception as exc:
@@ -124,12 +104,6 @@ class Orchestrator:
                     content="I'm experiencing a technical difficulty. Let me escalate this for you.",
                     routing_target="escalation",
                 )
-
-            if lf_span:
-                try:
-                    lf_span.end(output={"content": response.content[:500], "routing_target": response.routing_target})
-                except Exception:
-                    pass
 
             state.history.append(Message(role="assistant", content=response.content))
 
@@ -144,6 +118,25 @@ class Orchestrator:
             if target not in self._agents:
                 log.warning("orchestrator unknown_target=%s falling_back=escalation", target)
                 target = "escalation"
+
+            # For deterministic multi-intent sequencing, defer specialist follow-up handovers
+            # to the next user turn so the current specialist response is visible to the user.
+            if (
+                agent_key != "triage"
+                and response.metadata.get("handover_reason") == "pending_followup"
+            ):
+                state = self.handover.execute(
+                    state=state,
+                    source_agent=agent_key,
+                    target_agent=target,
+                    reason=f"Deferred follow-up from {agent_key} to {target}",
+                    response=response,
+                )
+                log.info(
+                    "orchestrator deferred_handover trace_id=%s from=%s to=%s",
+                    state.trace_id, agent_key, target,
+                )
+                break
 
             try:
                 state = self.handover.execute(
@@ -171,14 +164,5 @@ class Orchestrator:
                 agent="orchestrator",
                 content="I'm unable to process your request at the moment. Please try again.",
             )
-
-        if lf_trace:
-            try:
-                lf_trace.update(
-                    output={"content": response.content[:500], "agent": response.agent, "routing_target": response.routing_target},
-                )
-                self._lf.flush()
-            except Exception:
-                pass
 
         return state, response

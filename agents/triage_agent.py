@@ -26,7 +26,7 @@ _CLASSIFY_TOOL = {
                 },
                 "secondary_intent": {
                     "type": "string",
-                    "enum": ["technical", "billing", "account", "general", "none"],
+                    "enum": ["technical", "billing", "account", "general", "escalation", "none"],
                 },
                 "customer_plan": {
                     "type": "string",
@@ -95,10 +95,23 @@ class TriageAgent(BaseAgent):
 
         routing_target = classification["routing_target"]
         acknowledgement = classification["acknowledgement"]
+        primary_target = self._resolve_primary_target(classification.get("intent", "unknown"), routing_target)
+        secondary_target = self._resolve_secondary_target(classification.get("secondary_intent", "none"))
 
         # If LLM still somehow returns escalation, convert to clarification
-        if routing_target == "escalation":
-            routing_target = "triage"
+        if primary_target == "escalation":
+            primary_target = "triage"
+
+        # Deterministic sequencing for mixed intents:
+        # if a technical track is present anywhere, always handle technical first.
+        routing_target, secondary_target = self._enforce_technical_first(primary_target, secondary_target)
+
+        # Persist a normalized follow-up target for specialist agents.
+        # This enables deterministic cross-agent sequencing after primary resolution.
+        if secondary_target and secondary_target != routing_target:
+            state.entities["pending_followup_intent"] = secondary_target
+        else:
+            state.entities.pop("pending_followup_intent", None)
 
         return AgentResponse(
             agent=self.name,
@@ -106,7 +119,34 @@ class TriageAgent(BaseAgent):
             routing_target=routing_target,
             metadata={
                 "intent": classification.get("intent"),
+                "secondary_intent": classification.get("secondary_intent", "none"),
+                "pending_followup_intent": state.entities.get("pending_followup_intent"),
                 "urgency": classification.get("urgency"),
                 "entities": classification.get("extracted_entities", {}),
             },
         )
+
+    def _resolve_secondary_target(self, secondary_intent: str) -> str | None:
+        if not secondary_intent or secondary_intent == "none":
+            return None
+        normalized = self.routing_rules.get(secondary_intent, secondary_intent)
+        if normalized in {"technical", "billing", "escalation"}:
+            return normalized
+        return None
+
+    def _resolve_primary_target(self, intent: str, routing_target: str) -> str:
+        if routing_target in {"technical", "billing", "triage", "escalation"}:
+            return routing_target
+        normalized = self.routing_rules.get(intent, "triage")
+        if normalized in {"technical", "billing", "triage", "escalation"}:
+            return normalized
+        return "triage"
+
+    def _enforce_technical_first(self, primary_target: str, secondary_target: str | None) -> tuple[str, str | None]:
+        targets = {t for t in [primary_target, secondary_target] if t}
+        if "technical" in targets and len(targets) > 1:
+            followup = secondary_target if primary_target == "technical" else primary_target
+            if followup in {"billing", "escalation"}:
+                return "technical", followup
+            return "technical", None
+        return primary_target, secondary_target

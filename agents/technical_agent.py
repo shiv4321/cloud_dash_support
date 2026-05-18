@@ -40,6 +40,11 @@ class TechnicalAgent(BaseAgent):
         ).choices[0].message.content
 
         handover_target = self._detect_handover(reply, state)
+        handover_reason = "model_signal" if handover_target else None
+        if not handover_target:
+            handover_target = self._consume_pending_followup(state)
+            if handover_target:
+                handover_reason = "pending_followup"
 
         log.info(
             "technical trace_id=%s chunks_used=%d kb_miss=%s handover=%s",
@@ -51,7 +56,11 @@ class TechnicalAgent(BaseAgent):
             content=reply,
             routing_target=handover_target,
             sources=rag_result.sources,
-            metadata={"chunks_retrieved": len(rag_result.chunks), "kb_miss": rag_result.needs_escalation},
+            metadata={
+                "chunks_retrieved": len(rag_result.chunks),
+                "kb_miss": rag_result.needs_escalation,
+                "handover_reason": handover_reason,
+            },
         )
 
     def _detect_handover(self, reply: str, state: ConversationState) -> str | None:
@@ -62,4 +71,11 @@ class TechnicalAgent(BaseAgent):
         if any(kw in reply_lower for kw in ["escalat", "human support", "specialist"]):
             if "escalation" in self.can_handover_to:
                 return "escalation"
+        return None
+
+    def _consume_pending_followup(self, state: ConversationState) -> str | None:
+        target = state.entities.get("pending_followup_intent")
+        if target in self.can_handover_to:
+            state.entities.pop("pending_followup_intent", None)
+            return target
         return None
